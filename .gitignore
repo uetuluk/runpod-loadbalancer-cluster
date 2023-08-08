@@ -1,3 +1,4 @@
 .envrc
 Caddyfile
 env_vars.txt
+lightsail_ip.txt

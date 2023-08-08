@@ -5,9 +5,11 @@ import requests
 import time
 import boto3
 import os
+import argparse
 
 # env constants
 # runpod
+RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
 RUNPOD_CREATION_RETRIES = os.environ.get("RUNPOD_CREATION_RETRIES", 3)
 RUNPOD_GPU_TYPE = os.environ.get("RUNPOD_GPU_TYPE")
 RUNPOD_IMAGE_NAME = os.environ.get("RUNPOD_IMAGE_NAME")
@@ -41,6 +43,7 @@ def check_env_vars():
     print("Checking environment variables...")
 
     env_vars = [
+        "RUNPOD_API_KEY",
         "RUNPOD_GPU_TYPE",
         "RUNPOD_IMAGE_NAME",
         "RUNPOD_POD_NAME",
@@ -62,22 +65,24 @@ def check_env_vars():
 
     # write the env vars to a file
     with open("env_vars.txt", "w") as file:
-        file.write(f"RUNPOD_CREATION_RETRIES={RUNPOD_CREATION_RETRIES}\n")
-        file.write(f"RUNPOD_GPU_TYPE={RUNPOD_GPU_TYPE}\n")
-        file.write(f"RUNPOD_IMAGE_NAME={RUNPOD_IMAGE_NAME}\n")
         file.write(f"RUNPOD_POD_NAME={RUNPOD_POD_NAME}\n")
         file.write(f"RUNPOD_POD_COUNT={RUNPOD_POD_COUNT}\n")
-        file.write(f"RUNPOD_POD_START_RETRIES={RUNPOD_POD_START_RETRIES}\n")
-        file.write(f"RUNPOD_POD_START_RETRY_DELAY={RUNPOD_POD_START_RETRY_DELAY}\n")
         file.write(f"CADDY_DOMAIN={CADDY_DOMAIN}\n")
         file.write(f"LIGHTSAIL_INSTANCE_NAME={LIGHTSAIL_INSTANCE_NAME}\n")
-        file.write(f"LIGHTSAIL_INSTANCE_REGION={LIGHTSAIL_INSTANCE_REGION}\n")
-        file.write(f"LIGHTSAIL_INSTANCE_BUNDLE_ID={LIGHTSAIL_INSTANCE_BUNDLE_ID}\n")
-        file.write(f"CLOUDFLARE_API_KEY={CLOUDFLARE_API_KEY}\n")
-        file.write(f"CLOUDFLARE_ZONE_ID={CLOUDFLARE_ZONE_ID}\n")
     
     print("Wrote environment variables to env_vars.txt.")
     
+def create_runpod_config():
+
+    cmd = ['rundpodctl', 'config', f'--apiKey={RUNPOD_API_KEY}']
+
+    try:
+        subprocess.run(cmd, check=True)
+        print("Created runpod config.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error creating runpod config: {e}")
+        sys.exit(1)
+
 def run_command_and_extract_ids():
     """
     Runs the runpodctl command to create pods and extracts the pod IDs from the output.
@@ -272,48 +277,85 @@ if __name__ == '__main__':
     
     check_env_vars()
 
-    created_ids = run_command_and_extract_ids()
-
-    if created_ids:
-        print("Created Pod IDs:", created_ids)
-    else:
-        print(f"Command failed after ${RUNPOD_CREATION_RETRIES} retries.")
-        sys.exit(1)
+    # parse arguements
+    parser = argparse.ArgumentParser(description="Runpod cluster setup with loadbalaner.")
+    parser.add_argument("--skip-runpod", action="store_false", help="Skip runpod creation.")
+    parser.add_argument("--skip-loadbalancer", action="store_false", help="Skip loadbalancer creation.")
+    parser.add_argument("--skip-dns", action="store_false", help="Skip DNS record creation.")
     
-    working_ids = []
+    args = parser.parse_args()
 
-    # check if the pods are running
-    for pod_id in created_ids:
-        if ping_pod_until_ready(pod_id):
-            working_ids.append(pod_id)
+    # flags
+    CREATE_RUNPOD_PODS = args.skip_runpod
+    CREATE_LOADBALANCER = args.skip_loadbalancer
+    CREATE_DNS_RECORD = args.skip_dns
+
+    if CREATE_RUNPOD_PODS:
+        create_runpod_config()
+
+        created_ids = run_command_and_extract_ids()
+
+        if created_ids:
+            print("Created Pod IDs:", created_ids)
         else:
-            print(f"Pod {pod_id} did not become ready after multiple pings.")
+            print(f"Command failed after ${RUNPOD_CREATION_RETRIES} retries.")
+            sys.exit(1)
+        
+        working_ids = []
 
-    print("Working Pod IDs:", working_ids)
+        # check if the pods are running
+        for pod_id in created_ids:
+            if ping_pod_until_ready(pod_id):
+                working_ids.append(pod_id)
+            else:
+                print(f"Pod {pod_id} did not become ready after multiple pings.")
 
-    # Create a list of domains from the working IDs
-    domains = [get_domain_from_pod_id(pod_id) for pod_id in working_ids]
-    print("Working Domains:", domains)
+        print("Working Pod IDs:", working_ids)
 
-    # Generate the Caddyfile
-    if domains:
-        caddyfile_content = generate_caddyfile(domains)
+        # Create a list of domains from the working IDs
+        domains = [get_domain_from_pod_id(pod_id) for pod_id in working_ids]
+        print("Working Domains:", domains)
 
-        # Write the Caddyfile to disk
-        print("Writing Caddyfile to disk...")
-        with open("Caddyfile", "w") as file:
-            file.write(caddyfile_content)
+        # Generate the Caddyfile
+        if domains:
+            caddyfile_content = generate_caddyfile(domains)
+
+            # Write the Caddyfile to disk
+            print("Writing Caddyfile to disk...")
+            with open("Caddyfile", "w") as file:
+                file.write(caddyfile_content)
     
     # # create balancer
     # # create a lightsail instance
+    
+    if CREATE_LOADBALANCER:
+        if not CREATE_RUNPOD_PODS:
+            try:
+                caddyfile_content = open("Caddyfile", "r").read()
+            except FileNotFoundError:
+                print("Error: Runpod step should be run before load balancer creation.")
+                sys.exit(1)
 
-    lightsail_ip = create_lightsail_instance(caddyfile_content)
+        lightsail_ip = create_lightsail_instance(caddyfile_content)
 
-    print("Created Lightsail instance with IP:", lightsail_ip)
+        print("Created Lightsail instance with IP:", lightsail_ip)
+
+        # write the lightsail ip to a file
+        with open("lightsail_ip.txt", "w") as file:
+            file.write(lightsail_ip)
 
     # create dns record
-    print(f"Creating A DNS record for {CADDY_DOMAIN} pointing to {lightsail_ip}...")
-    create_dns_record(lightsail_ip)
+
+    if CREATE_DNS_RECORD:
+        if not CREATE_LOADBALANCER:
+            try:
+                lightsail_ip = open("lightsail_ip.txt", "r").read()
+            except FileNotFoundError:
+                print("Error: Load balancer step should be run before DNS record creation.")
+                sys.exit(1)
+
+        print(f"Creating A DNS record for {CADDY_DOMAIN} pointing to {lightsail_ip}...")
+        create_dns_record(lightsail_ip)
 
     print("All steps are completed.")
 

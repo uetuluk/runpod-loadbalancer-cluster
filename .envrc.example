@@ -2,6 +2,7 @@ export AWS_ACCESS_KEY_ID=""
 export AWS_SECRET_ACCESS_KEY=""
 export CLOUDFLARE_API_KEY=""
 export CLOUDFLARE_ZONE_ID=""
+export RUNPOD_API_KEY=""
 export RUNPOD_CREATION_RETRIES=3
 export RUNPOD_GPU_TYPE="NVIDIA GeForce RTX 3090"
 export RUNPOD_IMAGE_NAME="runpod/stable-diffusion:web-ui-10.1.0"

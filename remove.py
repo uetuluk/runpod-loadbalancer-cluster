@@ -3,6 +3,7 @@ import requests
 import os
 import subprocess
 import sys
+import argparse
 
 def setup_environment():
     """
@@ -112,9 +113,39 @@ def delete_dns_record():
         print(f"Error fetching DNS records: {response.json()}")
 
 if __name__ == '__main__':
+
     setup_environment()
+
     check_env_vars()
-    delete_runpod_containers()
-    delete_runpod_config()
-    delete_lightsail_instance()
-    delete_dns_record()
+
+    # parse arguements
+    parser = argparse.ArgumentParser(description="Cluster cleanup.")
+    parser.add_argument("--skip-runpod", action="store_false", help="Skip runpod deletion.")
+    parser.add_argument("--skip-loadbalancer", action="store_false", help="Skip loadbalancer deletion.")
+    parser.add_argument("--skip-dns", action="store_false", help="Skip DNS record deletion.")
+    
+    args = parser.parse_args()
+
+    # flags
+    DELETE_RUNPOD_PODS = args.skip_runpod
+    DELETE_LOADBALANCER = args.skip_loadbalancer
+    DELETE_DNS_RECORD = args.skip_dns
+    
+    if DELETE_RUNPOD_PODS:
+        print("Deleting runpod pods...")
+        
+        delete_runpod_containers()
+    
+        delete_runpod_config()
+    
+    if DELETE_LOADBALANCER:
+        print("Deleting loadbalancer...")
+        
+        delete_lightsail_instance()
+    
+    if DELETE_DNS_RECORD:
+        print("Deleting DNS record...")
+    
+        delete_dns_record()
+
+    print("All steps are completed.")
