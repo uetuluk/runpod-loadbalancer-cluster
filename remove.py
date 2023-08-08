@@ -118,6 +118,14 @@ if __name__ == '__main__':
 
     check_env_vars()
 
+    # create constants
+    CLOUDFLARE_API_KEY = os.environ['CLOUDFLARE_API_KEY']
+    CLOUDFLARE_ZONE_ID = os.environ['CLOUDFLARE_ZONE_ID']
+    CADDY_DOMAIN = os.environ['CADDY_DOMAIN']
+    RUNPOD_POD_NAME = os.environ['RUNPOD_POD_NAME']
+    RUNPOD_POD_COUNT = os.environ['RUNPOD_POD_COUNT']
+    LIGHTSAIL_INSTANCE_NAME = os.environ['LIGHTSAIL_INSTANCE_NAME']
+
     # parse arguements
     parser = argparse.ArgumentParser(description="Cluster cleanup.")
     parser.add_argument("--skip-runpod", action="store_false", help="Skip runpod deletion.")
