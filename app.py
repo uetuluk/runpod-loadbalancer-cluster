@@ -277,7 +277,7 @@ def create_dns_record(ip):
         "type": "A",
         "name": CADDY_DOMAIN,
         "content": ip,
-        "ttl": 120,  # 2 minutes, you can change this value
+        "ttl": 60,  # 2 minutes, you can change this value
         "proxied": True  # Determines whether to use Cloudflare proxy, adjust as needed
     }
 
