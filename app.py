@@ -179,7 +179,7 @@ def generate_caddyfile(domains):
     reverse_proxy * {
         header_up Host {http.reverse_proxy.upstream.hostport}
         header_down X-Endpoint {http.reverse_proxy.upstream.hostport}
-        lb_policy ip_hash
+        lb_policy cookie
         lb_try_duration 30s
         lb_try_interval 250ms
         health_uri /
