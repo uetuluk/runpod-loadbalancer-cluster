@@ -10,13 +10,13 @@ import argparse
 # env constants
 # runpod
 RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
-RUNPOD_CREATION_RETRIES = os.environ.get("RUNPOD_CREATION_RETRIES", 3)
+RUNPOD_CREATION_RETRIES = int(os.environ.get("RUNPOD_CREATION_RETRIES", "3"))
 RUNPOD_GPU_TYPE = os.environ.get("RUNPOD_GPU_TYPE")
 RUNPOD_IMAGE_NAME = os.environ.get("RUNPOD_IMAGE_NAME")
 RUNPOD_POD_NAME = os.environ.get("RUNPOD_POD_NAME")
-RUNPOD_POD_COUNT = os.environ.get("RUNPOD_POD_COUNT")
-RUNPOD_POD_START_RETRIES = os.environ.get("RUNPOD_POD_START_RETRIES", 30)
-RUNPOD_POD_START_RETRY_DELAY = os.environ.get("RUNPOD_POD_START_RETRY_DELAY", 60)
+RUNPOD_POD_COUNT = int(os.environ.get("RUNPOD_POD_COUNT"))
+RUNPOD_POD_START_RETRIES = int(os.environ.get("RUNPOD_POD_START_RETRIES", "30"))
+RUNPOD_POD_START_RETRY_DELAY = int(os.environ.get("RUNPOD_POD_START_RETRY_DELAY", "60"))
 
 # caddy
 CADDY_DOMAIN = os.environ.get("CADDY_DOMAIN")
@@ -74,7 +74,7 @@ def check_env_vars():
     
 def create_runpod_config():
 
-    cmd = ['rundpodctl', 'config', f'--apiKey={RUNPOD_API_KEY}']
+    cmd = ['runpodctl', 'config', f'--apiKey={RUNPOD_API_KEY}']
 
     try:
         subprocess.run(cmd, check=True)
@@ -131,6 +131,7 @@ def ping_pod_until_ready(pod_id):
     """
     url = f"http://{pod_id}-{RUNPOD_SD_PORT}.proxy.runpod.net"
 
+    print("Waiting for pods to become ready...")
     for attempt in range(RUNPOD_POD_START_RETRIES):
         try:
             response = requests.get(url)
@@ -169,13 +170,15 @@ def generate_caddyfile(domains):
     config_domain = f"https://{CADDY_DOMAIN}"
     base_config = """ {
     log
-    reverse_proxy / {
+    reverse_proxy * {
         header_up Host {http.reverse_proxy.upstream.hostport}
-        lb_policy header X-Forwarded-For
+        header_down X-Endpoint {http.reverse_proxy.upstream.hostport}
+        lb_policy ip_hash
         lb_try_duration 30s
         lb_try_interval 250ms
-"""
-    backend_servers = "\n".join([f"        to https://{domain}" for domain in domains])
+        health_uri /
+        to """
+    backend_servers = ", ".join([f"https://{domain}" for domain in domains])
     closing_config = """
     }
 }
@@ -359,4 +362,4 @@ if __name__ == '__main__':
 
     print("All steps are completed.")
 
-    print(f"You can access the load balancer at {CADDY_DOMAIN}")
+    print(f"You can access the load balancer at https://{CADDY_DOMAIN}")
