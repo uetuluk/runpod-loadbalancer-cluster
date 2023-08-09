@@ -5,6 +5,10 @@ help: ## Display this help message.
 requirements: ## Install requirements
 	pip install -r requirements.txt
 
+environment:
+	nano .envrc
+	direnv allow .
+
 create: ## Create cluster. 
 	python app.py
 

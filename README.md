@@ -16,7 +16,7 @@
 
 1. Setup the environment variables inside the .envrc file. You can use the .envrc.example as a template.
 
-2. Run `direnv allow` to load the environment variables.
+2. Run `direnv allow .` to load the environment variables.
 
 3. Run `python app.py` to create the cluster. You can also refer to Makefile.
    1. The RunPod cluster will be created according to the variables in the .envrc file and a Caddyfile will be created.
