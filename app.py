@@ -20,6 +20,7 @@ RUNPOD_POD_START_RETRY_DELAY = int(os.environ.get("RUNPOD_POD_START_RETRY_DELAY"
 
 # caddy
 CADDY_DOMAIN = os.environ.get("CADDY_DOMAIN")
+CLOUDFLARE_EMAIL = os.environ.get("CLOUDFLARE_EMAIL")
 
 # lightsail
 LIGHTSAIL_INSTANCE_NAME = os.environ.get("LIGHTSAIL_INSTANCE_NAME")
@@ -49,6 +50,7 @@ def check_env_vars():
         "RUNPOD_POD_NAME",
         "RUNPOD_POD_COUNT",
         "CADDY_DOMAIN",
+        "CLOUDFLARE_EMAIL",
         "LIGHTSAIL_INSTANCE_NAME",
         "LIGHTSAIL_INSTANCE_REGION",
         "LIGHTSAIL_INSTANCE_BUNDLE_ID",
@@ -167,8 +169,12 @@ def generate_caddyfile(domains):
     Returns:
     - str: Caddyfile content.
     """
-    config_domain = f"https://{CADDY_DOMAIN}"
-    base_config = """ {
+    config_domain = f"https://{CADDY_DOMAIN}" + """ {
+    """
+    tls_config = f"tls {CLOUDFLARE_EMAIL}" + """ {
+        dns cloudflare """ + f"{CLOUDFLARE_API_KEY}" + """
+    }"""
+    base_config = """
     log
     reverse_proxy * {
         header_up Host {http.reverse_proxy.upstream.hostport}
@@ -178,12 +184,12 @@ def generate_caddyfile(domains):
         lb_try_interval 250ms
         health_uri /
         to """
-    backend_servers = ", ".join([f"https://{domain}" for domain in domains])
+    backend_servers = " ".join([f"https://{domain}" for domain in domains])
     closing_config = """
     }
 }
 """
-    return config_domain + base_config + backend_servers + closing_config
+    return config_domain + tls_config + base_config + backend_servers + closing_config
 
 def create_lightsail_instance(caddyfile_content):
     """
@@ -204,8 +210,14 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --d
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
 sudo apt install caddy
+wget "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com%2Fcaddy-dns%2Fcloudflare&idempotency=72161063061013" -O /tmp/caddy
+sudo chmod +x /tmp/caddy
+sudo dpkg-divert --divert /usr/bin/caddy.default --rename /usr/bin/caddy
+sudo mv /tmp/caddy /usr/bin/caddy.custom
+sudo update-alternatives --install /usr/bin/caddy caddy /usr/bin/caddy.default 10
+sudo update-alternatives --install /usr/bin/caddy caddy /usr/bin/caddy.custom 50
 echo '{caddyfile_content}' > /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+sudo systemctl restart caddy
     """
 
     # Create a Lightsail instance
